@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tab Grouper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      background: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(99, 102, 241, 0.18), transparent),
+                  radial-gradient(ellipse 60% 40% at 90% 80%, rgba(168, 85, 247, 0.1), transparent),
+                  #0a0a0f;
+    }
+    .tab-row.dragging { opacity: 0.4; }
+    .group-card.drag-over {
+      outline: 2px dashed rgba(99, 102, 241, 0.6);
+      outline-offset: 2px;
+    }
+    .tab-row { cursor: grab; }
+    .tab-row:active { cursor: grabbing; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-in { animation: fadeInUp 0.35s ease-out both; }
+    .toast {
+      animation: fadeInUp 0.25s ease-out, fadeOut 0.25s ease-in 2.25s forwards;
+    }
+    @keyframes fadeOut {
+      to { opacity: 0; transform: translateY(-8px); }
+    }
+  </style>
+</head>
+<body class="min-h-screen text-slate-200 font-sans antialiased">
+
+  <!-- Header -->
+  <header class="border-b border-white/5 bg-black/20 backdrop-blur-md sticky top-0 z-30">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-white tracking-tight">Tab Grouper</h1>
+          <p class="text-xs text-slate-500 hidden sm:block">Paste tabs, get organized groups</p>
+        </div>
+      </div>
+      <div id="global-actions" class="hidden items-center gap-2">
+        <button id="btn-export-all" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600/80 hover:bg-indigo-500 text-white transition-colors">
+          Export all as markdown
+        </button>
+        <button id="btn-clear" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border border-white/10 transition-colors">
+          Clear
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+
+    <!-- Input section -->
+    <section class="animate-in">
+      <label for="tab-input" class="block text-sm font-medium text-slate-400 mb-2">
+        Paste your open tabs
+      </label>
+      <textarea
+        id="tab-input"
+        rows="8"
+        placeholder="Paste anything — URLs, titles, or mixed formats like:&#10;&#10;https://github.com/user/repo&#10;How to use React hooks - https://developer.mozilla.org/en-US/docs/Web/JavaScript&#10;My Jira ticket — https://company.atlassian.net/browse/PROJ-123&#10;Random article title with no URL"
+        class="w-full px-4 py-3 rounded-xl bg-white/[0.03] border border-white/10 text-slate-200 placeholder-slate-600 font-mono text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all resize-y"
+      ></textarea>
+      <div class="mt-4 flex items-center gap-3">
+        <button
+          id="btn-group"
+          class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold text-sm shadow-lg shadow-indigo-600/25 transition-all hover:shadow-indigo-500/40 active:scale-[0.98]"
+        >
+          Group Tabs
+        </button>
+        <span id="input-hint" class="text-xs text-slate-600">Supports URLs, titles, or title — url formats</span>
+      </div>
+    </section>
+
+    <!-- Error -->
+    <div id="error-msg" class="hidden px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm"></div>
+
+    <!-- Results -->
+    <section id="results" class="hidden space-y-5"></section>
+
+  </main>
+
+  <!-- Toast container -->
+  <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <script>
+    // ─── Config ───────────────────────────────────────────────────────────────
+
+    const GROUPS = [
+      {
+        name: 'Work & Productivity',
+        color: 'border-blue-500',
+        badge: 'bg-blue-500/15 text-blue-400',
+        keywords: ['notion', 'jira', 'figma', 'docs.google', 'sheets.google', 'github', 'linear', 'confluence', 'slack', 'zoom', 'meet.google', 'loom'],
+      },
+      {
+        name: 'Social',
+        color: 'border-pink-500',
+        badge: 'bg-pink-500/15 text-pink-400',
+        keywords: ['twitter', 'x.com', 'instagram', 'reddit', 'linkedin', 'facebook'],
+      },
+      {
+        name: 'Shopping',
+        color: 'border-orange-500',
+        badge: 'bg-orange-500/15 text-orange-400',
+        keywords: ['amazon', 'flipkart', 'meesho', 'myntra', 'swiggy', 'zomato', 'blinkit'],
+      },
+      {
+        name: 'Learning',
+        color: 'border-emerald-500',
+        badge: 'bg-emerald-500/15 text-emerald-400',
+        keywords: ['stackoverflow', 'stack overflow', 'mdn', 'medium', 'coursera', 'udemy', 'dev.to'],
+      },
+      {
+        name: 'News & Reads',
+        color: 'border-amber-500',
+        badge: 'bg-amber-500/15 text-amber-400',
+        keywords: ['timesofindia', 'thehindu', 'hindu', 'bbc', 'techcrunch', 'theverge', 'verge', 'wired', 'substack', 'nytimes', 'guardian'],
+      },
+      {
+        name: 'Entertainment',
+        color: 'border-purple-500',
+        badge: 'bg-purple-500/15 text-purple-400',
+        keywords: ['netflix', 'spotify', 'hotstar', 'youtube', 'youtu.be', 'twitch'],
+      },
+      {
+        name: 'Misc',
+        color: 'border-slate-500',
+        badge: 'bg-slate-500/15 text-slate-400',
+        keywords: [],
+      },
+    ];
+
+    const TITLE_SUFFIXES = [
+      /\s*[-–—|]\s*YouTube\s*$/i,
+      /\s*[-–—|]\s*GitHub\s*$/i,
+      /\s*[-–—|]\s*Stack Overflow\s*$/i,
+      /\s*[-–—|]\s*Medium\s*$/i,
+      /\s*[-–—|]\s*Reddit\s*$/i,
+      /\s*[-–—|]\s*Twitter\s*$/i,
+      /\s*[-–—|]\s*X\s*$/i,
+      /\s*[-–—|]\s*LinkedIn\s*$/i,
+      /\s*[-–—|]\s*Google Docs\s*$/i,
+      /\s*[-–—|]\s*Google Sheets\s*$/i,
+      /\s*[-–—|]\s*Notion\s*$/i,
+      /\s*[-–—|]\s*Jira\s*$/i,
+      /\s*[-–—|]\s*Figma\s*$/i,
+      /\s*[-–—|]\s*Netflix\s*$/i,
+      /\s*[-–—|]\s*Spotify\s*$/i,
+      /\s*[-–—|]\s*Amazon\s*$/i,
+      /\s*[-–—|]\s*Wikipedia\s*$/i,
+    ];
+
+    const LEARNING_TITLE_RE = /\b(tutorial|course|learn|lesson|guide|how to|walkthrough|training|lecture|workshop)\b/i;
+
+    // ─── State ────────────────────────────────────────────────────────────────
+
+    let groupedTabs = {}; // { groupName: [tab, ...] }
+    let dragTabId = null;
+
+    // ─── Parsing ──────────────────────────────────────────────────────────────
+
+    function cleanTitle(title) {
+      if (!title) return '';
+      let t = title.trim();
+      for (const re of TITLE_SUFFIXES) t = t.replace(re, '');
+      return t.trim();
+    }
+
+    function extractHostname(url) {
+      try {
+        const u = new URL(url.startsWith('http') ? url : 'https://' + url);
+        return u.hostname.replace(/^www\./, '');
+      } catch {
+        return '';
+      }
+    }
+
+    function titleFromUrl(url) {
+      const host = extractHostname(url);
+      if (!host) return url;
+      const parts = host.split('.');
+      if (parts.length >= 2) return parts[parts.length - 2];
+      return host;
+    }
+
+    function parseLine(line) {
+      line = line.trim();
+      if (!line) return null;
+
+      const urlRe = /https?:\/\/[^\s,)]+/i;
+
+      // Bare URL
+      if (/^https?:\/\/[^\s,)]+$/i.test(line)) {
+        return { title: titleFromUrl(line), url: line };
+      }
+
+      // title — url  (em dash, en dash, hyphen, pipe)
+      const mixedRe = /^(.+?)\s*[-–—|]\s*(https?:\/\/[^\s,)]+)\s*$/i;
+      const mixed = line.match(mixedRe);
+      if (mixed) {
+        return { title: cleanTitle(mixed[1]) || titleFromUrl(mixed[2]), url: mixed[2] };
+      }
+
+      // URL embedded somewhere
+      const urlMatch = line.match(urlRe);
+      if (urlMatch) {
+        const url = urlMatch[0];
+        const rest = line.replace(url, '').replace(/[-–—|]\s*$/, '').trim();
+        return { title: rest ? cleanTitle(rest) : titleFromUrl(url), url };
+      }
+
+      // Title only
+      return { title: cleanTitle(line), url: null };
+    }
+
+    function parseInput(text) {
+      const lines = text.split('\n');
+      const seen = new Set();
+      const tabs = [];
+
+      for (const line of lines) {
+        const tab = parseLine(line);
+        if (!tab) continue;
+
+        const key = tab.url ? tab.url.replace(/\/$/, '').toLowerCase() : tab.title.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        tabs.push({ ...tab, id: crypto.randomUUID() });
+      }
+      return tabs;
+    }
+
+    // ─── Categorization ───────────────────────────────────────────────────────
+
+    function categorize(tab) {
+      const host = tab.url ? extractHostname(tab.url) : '';
+      const haystack = (host + ' ' + (tab.title || '')).toLowerCase();
+
+      // YouTube special case
+      if (host.includes('youtube') || host.includes('youtu.be')) {
+        if (LEARNING_TITLE_RE.test(tab.title || '')) return 'Learning';
+        return 'Entertainment';
+      }
+
+      for (const group of GROUPS) {
+        if (group.name === 'Misc') continue;
+        for (const kw of group.keywords) {
+          if (haystack.includes(kw.toLowerCase())) return group.name;
+        }
+      }
+      return 'Misc';
+    }
+
+    function groupTabs(tabs) {
+      const result = {};
+      for (const g of GROUPS) result[g.name] = [];
+      for (const tab of tabs) {
+        const group = categorize(tab);
+        result[group].push(tab);
+      }
+      // Remove empty groups except keep structure for drag-drop targets
+      return result;
+    }
+
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    function truncate(str, len = 60) {
+      if (!str || str.length <= len) return str || '';
+      return str.slice(0, len - 1) + '…';
+    }
+
+    function faviconUrl(tab) {
+      if (tab.url) return `https://www.google.com/s2/favicons?domain=${extractHostname(tab.url)}&sz=32`;
+      return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%2364748b"><rect width="24" height="24" rx="4"/></svg>');
+    }
+
+    function showToast(msg) {
+      const container = document.getElementById('toast-container');
+      const el = document.createElement('div');
+      el.className = 'toast px-4 py-2.5 rounded-lg bg-slate-800 border border-white/10 text-sm text-slate-200 shadow-xl';
+      el.textContent = msg;
+      container.appendChild(el);
+      setTimeout(() => el.remove(), 2600);
+    }
+
+    function copyText(text) {
+      navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard'));
+    }
+
+    function groupToText(groupName, tabs) {
+      let out = groupName + '\n';
+      for (const t of tabs) {
+        out += t.url ? `  ${t.title} — ${t.url}\n` : `  ${t.title}\n`;
+      }
+      return out.trim();
+    }
+
+    function groupToMarkdown(groupName, tabs) {
+      let out = `## ${groupName}\n`;
+      for (const t of tabs) {
+        out += t.url ? `- [${t.title}](${t.url})\n` : `- ${t.title}\n`;
+      }
+      return out.trim();
+    }
+
+    function allToMarkdown(grouped) {
+      return GROUPS
+        .filter(g => grouped[g.name]?.length)
+        .map(g => groupToMarkdown(g.name, grouped[g.name]))
+        .join('\n\n');
+    }
+
+    // ─── Rendering ────────────────────────────────────────────────────────────
+
+    function renderResults() {
+      const container = document.getElementById('results');
+      container.innerHTML = '';
+
+      const nonEmpty = GROUPS.filter(g => groupedTabs[g.name]?.length);
+      if (!nonEmpty.length) {
+        container.classList.add('hidden');
+        document.getElementById('global-actions').classList.add('hidden');
+        document.getElementById('global-actions').classList.remove('flex');
+        return;
+      }
+
+      container.classList.remove('hidden');
+      const globalActions = document.getElementById('global-actions');
+      globalActions.classList.remove('hidden');
+      globalActions.classList.add('flex');
+
+      nonEmpty.forEach((group, idx) => {
+        const tabs = groupedTabs[group.name];
+        const card = document.createElement('div');
+        card.className = `group-card animate-in border-l-4 ${group.color} rounded-xl bg-white/[0.03] border border-white/[0.06] overflow-hidden`;
+        card.style.animationDelay = `${idx * 0.06}s`;
+        card.dataset.group = group.name;
+
+        card.innerHTML = `
+          <div class="px-5 py-4 flex items-center justify-between gap-3 border-b border-white/[0.04]">
+            <div class="flex items-center gap-3 min-w-0">
+              <h2 class="text-base font-semibold text-white truncate">${group.name}</h2>
+              <span class="shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${group.badge}">${tabs.length}</span>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <button data-action="copy-text" data-group="${group.name}" class="px-2.5 py-1 text-xs rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border border-white/10 transition-colors">Copy as text</button>
+              <button data-action="copy-md" data-group="${group.name}" class="px-2.5 py-1 text-xs rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border border-white/10 transition-colors">Copy as markdown</button>
+            </div>
+          </div>
+          <div class="tab-list divide-y divide-white/[0.04]" data-group="${group.name}"></div>
+        `;
+
+        const list = card.querySelector('.tab-list');
+        tabs.forEach(tab => list.appendChild(renderTabRow(tab, group.name)));
+
+        // Drop zone events on card
+        card.addEventListener('dragover', e => { e.preventDefault(); card.classList.add('drag-over'); });
+        card.addEventListener('dragleave', e => { if (!card.contains(e.relatedTarget)) card.classList.remove('drag-over'); });
+        card.addEventListener('drop', e => {
+          e.preventDefault();
+          card.classList.remove('drag-over');
+          handleDrop(group.name);
+        });
+
+        container.appendChild(card);
+      });
+
+      // Delegate copy buttons
+      container.querySelectorAll('[data-action]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const g = btn.dataset.group;
+          const tabs = groupedTabs[g];
+          if (btn.dataset.action === 'copy-text') copyText(groupToText(g, tabs));
+          else copyText(groupToMarkdown(g, tabs));
+        });
+      });
+    }
+
+    function renderTabRow(tab, groupName) {
+      const row = document.createElement('div');
+      row.className = 'tab-row flex items-center gap-3 px-5 py-2.5 hover:bg-white/[0.03] transition-colors';
+      row.draggable = true;
+      row.dataset.tabId = tab.id;
+      row.dataset.group = groupName;
+
+      const titleHtml = tab.url
+        ? `<a href="${escapeAttr(tab.url)}" target="_blank" rel="noopener" class="text-sm text-slate-300 hover:text-indigo-400 transition-colors truncate" title="${escapeAttr(tab.title)}">${escapeHtml(truncate(tab.title))}</a>`
+        : `<span class="text-sm text-slate-400 truncate" title="${escapeAttr(tab.title)}">${escapeHtml(truncate(tab.title))}</span>`;
+
+      row.innerHTML = `
+        <img src="${faviconUrl(tab)}" alt="" class="w-4 h-4 shrink-0 rounded-sm" loading="lazy" onerror="this.style.opacity='0.3'" />
+        <div class="flex-1 min-w-0">${titleHtml}</div>
+        ${tab.url ? `<span class="hidden sm:block text-xs text-slate-600 truncate max-w-[180px] font-mono">${escapeHtml(truncate(extractHostname(tab.url), 30))}</span>` : ''}
+        <svg class="w-4 h-4 text-slate-700 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
+      `;
+
+      row.addEventListener('dragstart', e => {
+        dragTabId = tab.id;
+        row.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', tab.id);
+      });
+      row.addEventListener('dragend', () => {
+        row.classList.remove('dragging');
+        dragTabId = null;
+        document.querySelectorAll('.group-card').forEach(c => c.classList.remove('drag-over'));
+      });
+
+      return row;
+    }
+
+    function handleDrop(targetGroup) {
+      if (!dragTabId) return;
+
+      let sourceGroup = null;
+      let tab = null;
+      for (const [g, tabs] of Object.entries(groupedTabs)) {
+        const idx = tabs.findIndex(t => t.id === dragTabId);
+        if (idx !== -1) {
+          sourceGroup = g;
+          tab = tabs.splice(idx, 1)[0];
+          break;
+        }
+      }
+      if (!tab || sourceGroup === targetGroup) {
+        if (tab && sourceGroup) groupedTabs[sourceGroup].push(tab);
+        return;
+      }
+      groupedTabs[targetGroup].push(tab);
+      renderResults();
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function escapeAttr(str) {
+      return escapeHtml(str).replace(/'/g, '&#39;');
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error-msg');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+
+    function hideError() {
+      document.getElementById('error-msg').classList.add('hidden');
+    }
+
+    // ─── Main actions ─────────────────────────────────────────────────────────
+
+    function handleGroup() {
+      hideError();
+      const text = document.getElementById('tab-input').value;
+      const tabs = parseInput(text);
+
+      if (tabs.length < 2) {
+        showError('Need at least 2 tabs to group. Paste more tabs and try again.');
+        document.getElementById('results').classList.add('hidden');
+        document.getElementById('global-actions').classList.add('hidden');
+        document.getElementById('global-actions').classList.remove('flex');
+        return;
+      }
+
+      groupedTabs = groupTabs(tabs);
+      renderResults();
+    }
+
+    function handleClear() {
+      document.getElementById('tab-input').value = '';
+      groupedTabs = {};
+      document.getElementById('results').classList.add('hidden');
+      document.getElementById('global-actions').classList.add('hidden');
+      document.getElementById('global-actions').classList.remove('flex');
+      hideError();
+    }
+
+    document.getElementById('btn-group').addEventListener('click', handleGroup);
+    document.getElementById('btn-clear').addEventListener('click', handleClear);
+    document.getElementById('btn-export-all').addEventListener('click', () => {
+      copyText(allToMarkdown(groupedTabs));
+    });
+
+    // Keyboard shortcut: Ctrl/Cmd + Enter to group
+    document.getElementById('tab-input').addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') handleGroup();
+    });
+  </script>
+</body>
+</html>
