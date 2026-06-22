@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Tab Grouper</title>
+  <title>Tabby</title>
+  <meta name="application-name" content="Tabby" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -59,7 +60,7 @@
   <!-- Header -->
   <header class="sticky top-0 z-40 bg-cream/90 backdrop-blur-sm border-b border-black/[0.06]">
     <div class="max-w-3xl mx-auto px-5 h-14 flex items-center justify-between">
-      <span class="text-[15px] font-semibold tracking-tight">Tab Grouper</span>
+      <span class="text-[15px] font-semibold tracking-tight">Tabby</span>
 
       <div class="flex items-center gap-2">
         <div id="global-actions" class="hidden items-center gap-2 mr-1">
@@ -88,7 +89,7 @@
               <p class="text-[11px] text-stone mb-2">Or drag to your bookmarks bar:</p>
               <a id="bookmark-drag-link" href="" draggable="true"
                  class="block text-center px-3 py-2 rounded-xl bg-olive/10 text-olive text-[12px] font-medium hover:bg-olive/15 transition-colors cursor-grab active:cursor-grabbing">
-                Tab Grouper
+                Tabby
               </a>
             </div>
           </div>
@@ -111,14 +112,14 @@
 
     <!-- Input -->
     <section class="rise" style="animation-delay:0.06s">
-      <div class="rounded-[1.75rem] bg-white border border-black/[0.07] overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+      <div class="rounded-[1.75rem] bg-white border border-black/[0.07] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
         <textarea
           id="tab-input"
-          rows="7"
+          rows="5"
           placeholder="Paste tabs here…&#10;&#10;https://github.com/user/repo&#10;Fix login bug — https://company.atlassian.net/browse/PROJ-42&#10;React hooks tutorial - https://youtube.com/watch?v=abc"
-          class="w-full px-5 py-4 text-[14px] text-ink placeholder:text-stone/50 leading-relaxed bg-transparent focus:outline-none resize-y min-h-[160px]"
+          class="w-full text-[14px] text-ink placeholder:text-stone/50 leading-[1.65] bg-transparent focus:outline-none resize-y min-h-[120px]"
         ></textarea>
-        <div class="px-5 py-3.5 border-t border-black/[0.05] flex items-center justify-between gap-3 bg-cream/40">
+        <div class="mt-5 pt-5 border-t border-black/[0.06] flex items-center justify-between gap-3">
           <span class="text-[12px] text-stone hidden sm:block">URLs, titles, or title — url</span>
           <button id="btn-group" class="ml-auto inline-flex items-center gap-2 pl-5 pr-5 py-2.5 rounded-full bg-olive text-white text-[13px] font-medium hover:bg-[#2f3917] transition-colors active:scale-[0.98]">
             Group tabs
@@ -134,9 +135,10 @@
     <div id="error-msg" class="hidden mt-5 px-4 py-3 rounded-2xl bg-red-50 border border-red-200/60 text-red-700 text-[13px]"></div>
 
     <!-- Results -->
-    <div id="results-wrap" class="hidden mt-14 relative">
-      <div class="absolute -inset-x-4 -top-6 bottom-0 bg-olive-pale/60 rounded-[2rem] -z-10" aria-hidden="true"></div>
-      <section id="results" class="space-y-4 pt-2"></section>
+    <div id="results-wrap" class="hidden mt-12">
+      <div class="rounded-[1.75rem] bg-olive-pale/50 p-4 sm:p-5">
+        <section id="results" class="space-y-3"></section>
+      </div>
     </div>
 
   </main>
@@ -299,7 +301,7 @@
     // ─── Categorization ───────────────────────────────────────────────────────
 
     function categorize(tab) {
-      const host = tab.url ? extractHostname(tab.url) : '';
+      const host = tabDomain(tab);
       const haystack = (host + ' ' + (tab.title || '')).toLowerCase();
 
       if (host.includes('youtube') || host.includes('youtu.be')) {
@@ -329,8 +331,27 @@
       return str.slice(0, len - 1) + '…';
     }
 
+    const DOMAIN_HINTS = {
+      github: 'github.com', youtube: 'youtube.com', twitter: 'twitter.com', x: 'x.com',
+      reddit: 'reddit.com', notion: 'notion.so', figma: 'figma.com', slack: 'slack.com',
+      amazon: 'amazon.com', netflix: 'netflix.com', spotify: 'spotify.com', linkedin: 'linkedin.com',
+      instagram: 'instagram.com', medium: 'medium.com', stackoverflow: 'stackoverflow.com',
+    };
+
+    function domainFromTitle(title) {
+      if (!title) return '';
+      const key = title.toLowerCase().trim();
+      return DOMAIN_HINTS[key] || '';
+    }
+
+    function tabDomain(tab) {
+      if (tab.url) return extractHostname(tab.url);
+      return domainFromTitle(tab.title);
+    }
+
     function faviconUrl(tab) {
-      if (tab.url) return `https://www.google.com/s2/favicons?domain=${extractHostname(tab.url)}&sz=32`;
+      const domain = tabDomain(tab);
+      if (domain) return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
       return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="3" fill="%23c8c4b8"/></svg>');
     }
 
@@ -398,18 +419,18 @@
         card.dataset.group = group.name;
 
         card.innerHTML = `
-          <div class="px-5 py-4 flex items-start sm:items-center justify-between gap-3 border-b border-black/[0.05]">
-            <div class="flex items-baseline gap-2.5 min-w-0">
-              <h2 class="font-serif text-[1.35rem] leading-tight text-ink truncate">${group.name}</h2>
+          <div class="px-4 py-3 flex items-center justify-between gap-3">
+            <div class="flex items-baseline gap-2 min-w-0">
+              <h2 class="font-serif text-[1.15rem] leading-snug text-ink truncate">${group.name}</h2>
               <span class="shrink-0 text-[11px] font-medium text-stone tabular-nums">${tabs.length}</span>
             </div>
             <div class="flex items-center gap-1 shrink-0">
-              <button data-action="copy-text" data-group="${group.name}" class="px-2.5 py-1 text-[11px] text-stone hover:text-ink transition-colors">Copy text</button>
+              <button data-action="copy-text" data-group="${group.name}" class="px-2 py-0.5 text-[11px] text-stone hover:text-ink transition-colors">Copy text</button>
               <span class="text-black/10">·</span>
-              <button data-action="copy-md" data-group="${group.name}" class="px-2.5 py-1 text-[11px] text-stone hover:text-ink transition-colors">Copy md</button>
+              <button data-action="copy-md" data-group="${group.name}" class="px-2 py-0.5 text-[11px] text-stone hover:text-ink transition-colors">Copy md</button>
             </div>
           </div>
-          <div class="tab-list" data-group="${group.name}"></div>
+          <div class="tab-list border-t border-black/[0.05]" data-group="${group.name}"></div>
         `;
 
         const list = card.querySelector('.tab-list');
@@ -437,7 +458,7 @@
 
     function renderTabRow(tab, groupName) {
       const row = document.createElement('div');
-      row.className = 'tab-row flex items-center gap-3 px-5 py-2.5 hover:bg-cream/60 transition-colors';
+      row.className = 'tab-row flex items-center gap-2.5 px-4 py-2 hover:bg-cream/60 transition-colors';
       row.draggable = true;
       row.dataset.tabId = tab.id;
       row.dataset.group = groupName;
@@ -449,7 +470,7 @@
       row.innerHTML = `
         <img src="${faviconUrl(tab)}" alt="" class="w-4 h-4 shrink-0 rounded-[3px]" loading="lazy" onerror="this.style.opacity='0.35'" />
         <div class="flex-1 min-w-0">${titleHtml}</div>
-        ${tab.url ? `<span class="hidden sm:block text-[11px] text-stone/70 truncate max-w-[140px]">${escapeHtml(truncate(extractHostname(tab.url), 28))}</span>` : ''}
+        ${tabDomain(tab) ? `<span class="hidden sm:block text-[11px] text-stone/70 truncate max-w-[140px]">${escapeHtml(truncate(tabDomain(tab), 28))}</span>` : ''}
       `;
 
       row.addEventListener('dragstart', e => {
