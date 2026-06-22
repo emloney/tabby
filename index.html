@@ -9,9 +9,15 @@
     tailwind.config = {
       theme: {
         extend: {
+          colors: {
+            cream: '#f7f6f2',
+            olive: { DEFAULT: '#3d4a1e', light: '#a3b18a', pale: '#dce2d0' },
+            ink: '#1a1a18',
+            stone: '#6b6b63',
+          },
           fontFamily: {
-            sans: ['Inter', 'system-ui', 'sans-serif'],
-            mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+            serif: ['"Instrument Serif"', 'Georgia', 'serif'],
+            sans: ['"DM Sans"', 'system-ui', 'sans-serif'],
           },
         },
       },
@@ -19,98 +25,123 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
   <style>
-    body {
-      background: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(99, 102, 241, 0.18), transparent),
-                  radial-gradient(ellipse 60% 40% at 90% 80%, rgba(168, 85, 247, 0.1), transparent),
-                  #0a0a0f;
-    }
-    .tab-row.dragging { opacity: 0.4; }
-    .group-card.drag-over {
-      outline: 2px dashed rgba(99, 102, 241, 0.6);
-      outline-offset: 2px;
-    }
+    body { background-color: #f7f6f2; }
+
+    .tab-row.dragging { opacity: 0.35; }
+    .group-card.drag-over { box-shadow: 0 0 0 2px #3d4a1e; }
+
     .tab-row { cursor: grab; }
     .tab-row:active { cursor: grabbing; }
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: #475569; }
-    @keyframes fadeInUp {
-      from { opacity: 0; transform: translateY(12px); }
-      to { opacity: 1; transform: translateY(0); }
+
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-thumb { background: #c8c4b8; border-radius: 99px; }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
-    .animate-in { animation: fadeInUp 0.35s ease-out both; }
-    .toast {
-      animation: fadeInUp 0.25s ease-out, fadeOut 0.25s ease-in 2.25s forwards;
+    .rise { animation: rise 0.4s ease both; }
+
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
-    @keyframes fadeOut {
-      to { opacity: 0; transform: translateY(-8px); }
-    }
+    .toast-item { animation: toast-in 0.2s ease, toast-out 0.2s ease 2.2s forwards; }
+    @keyframes toast-out { to { opacity: 0; transform: translateY(-4px); } }
+
+    #bookmark-popover:not(.hidden) { animation: rise 0.18s ease; }
   </style>
 </head>
-<body class="min-h-screen text-slate-200 font-sans antialiased">
+<body class="min-h-screen text-ink font-sans antialiased">
 
   <!-- Header -->
-  <header class="border-b border-white/5 bg-black/20 backdrop-blur-md sticky top-0 z-30">
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
-      <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
-          </svg>
+  <header class="sticky top-0 z-40 bg-cream/90 backdrop-blur-sm border-b border-black/[0.06]">
+    <div class="max-w-3xl mx-auto px-5 h-14 flex items-center justify-between">
+      <span class="text-[15px] font-semibold tracking-tight">Tab Grouper</span>
+
+      <div class="flex items-center gap-2">
+        <div id="global-actions" class="hidden items-center gap-2 mr-1">
+          <button id="btn-export-all" class="hidden sm:inline-flex px-3 py-1.5 text-[12px] font-medium text-stone hover:text-ink transition-colors">
+            Export markdown
+          </button>
+          <button id="btn-clear" class="px-3 py-1.5 text-[12px] font-medium text-stone hover:text-ink transition-colors">
+            Clear
+          </button>
         </div>
-        <div>
-          <h1 class="text-lg font-bold text-white tracking-tight">Tab Grouper</h1>
-          <p class="text-xs text-slate-500 hidden sm:block">Paste tabs, get organized groups</p>
+
+        <!-- Bookmark -->
+        <div class="relative">
+          <button id="btn-bookmark" class="inline-flex items-center gap-1.5 pl-3.5 pr-4 py-2 rounded-full bg-olive text-white text-[13px] font-medium hover:bg-[#2f3917] transition-colors">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+            </svg>
+            Bookmark
+          </button>
+          <div id="bookmark-popover" class="hidden absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl border border-black/[0.08] shadow-[0_8px_30px_rgba(0,0,0,0.08)] p-4 z-50">
+            <p class="text-[13px] font-medium text-ink mb-1">Save this page</p>
+            <p class="text-[12px] text-stone leading-relaxed mb-3">
+              Press <kbd id="bookmark-kbd" class="px-1.5 py-0.5 rounded bg-cream border border-black/10 text-[11px] font-medium text-ink"></kbd> to bookmark instantly.
+            </p>
+            <div class="pt-3 border-t border-black/[0.06]">
+              <p class="text-[11px] text-stone mb-2">Or drag to your bookmarks bar:</p>
+              <a id="bookmark-drag-link" href="" draggable="true"
+                 class="block text-center px-3 py-2 rounded-xl bg-olive/10 text-olive text-[12px] font-medium hover:bg-olive/15 transition-colors cursor-grab active:cursor-grabbing">
+                Tab Grouper
+              </a>
+            </div>
+          </div>
         </div>
-      </div>
-      <div id="global-actions" class="hidden items-center gap-2">
-        <button id="btn-export-all" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600/80 hover:bg-indigo-500 text-white transition-colors">
-          Export all as markdown
-        </button>
-        <button id="btn-clear" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border border-white/10 transition-colors">
-          Clear
-        </button>
       </div>
     </div>
   </header>
 
-  <main class="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+  <main class="max-w-3xl mx-auto px-5 pt-12 pb-20">
 
-    <!-- Input section -->
-    <section class="animate-in">
-      <label for="tab-input" class="block text-sm font-medium text-slate-400 mb-2">
-        Paste your open tabs
-      </label>
-      <textarea
-        id="tab-input"
-        rows="8"
-        placeholder="Paste anything — URLs, titles, or mixed formats like:&#10;&#10;https://github.com/user/repo&#10;How to use React hooks - https://developer.mozilla.org/en-US/docs/Web/JavaScript&#10;My Jira ticket — https://company.atlassian.net/browse/PROJ-123&#10;Random article title with no URL"
-        class="w-full px-4 py-3 rounded-xl bg-white/[0.03] border border-white/10 text-slate-200 placeholder-slate-600 font-mono text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-all resize-y"
-      ></textarea>
-      <div class="mt-4 flex items-center gap-3">
-        <button
-          id="btn-group"
-          class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold text-sm shadow-lg shadow-indigo-600/25 transition-all hover:shadow-indigo-500/40 active:scale-[0.98]"
-        >
-          Group Tabs
-        </button>
-        <span id="input-hint" class="text-xs text-slate-600">Supports URLs, titles, or title — url formats</span>
+    <!-- Hero -->
+    <div class="text-center mb-10 rise">
+      <h1 class="font-serif text-[clamp(2.4rem,6vw,3.6rem)] leading-[1.1] tracking-[-0.02em] text-ink">
+        Sort your tabs.
+      </h1>
+      <p class="mt-3 text-[15px] text-stone max-w-sm mx-auto leading-relaxed">
+        Paste a messy list of open tabs — URLs, titles, anything. Get clean groups in seconds.
+      </p>
+    </div>
+
+    <!-- Input -->
+    <section class="rise" style="animation-delay:0.06s">
+      <div class="rounded-[1.75rem] bg-white border border-black/[0.07] overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+        <textarea
+          id="tab-input"
+          rows="7"
+          placeholder="Paste tabs here…&#10;&#10;https://github.com/user/repo&#10;Fix login bug — https://company.atlassian.net/browse/PROJ-42&#10;React hooks tutorial - https://youtube.com/watch?v=abc"
+          class="w-full px-5 py-4 text-[14px] text-ink placeholder:text-stone/50 leading-relaxed bg-transparent focus:outline-none resize-y min-h-[160px]"
+        ></textarea>
+        <div class="px-5 py-3.5 border-t border-black/[0.05] flex items-center justify-between gap-3 bg-cream/40">
+          <span class="text-[12px] text-stone hidden sm:block">URLs, titles, or title — url</span>
+          <button id="btn-group" class="ml-auto inline-flex items-center gap-2 pl-5 pr-5 py-2.5 rounded-full bg-olive text-white text-[13px] font-medium hover:bg-[#2f3917] transition-colors active:scale-[0.98]">
+            Group tabs
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </section>
 
     <!-- Error -->
-    <div id="error-msg" class="hidden px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm"></div>
+    <div id="error-msg" class="hidden mt-5 px-4 py-3 rounded-2xl bg-red-50 border border-red-200/60 text-red-700 text-[13px]"></div>
 
     <!-- Results -->
-    <section id="results" class="hidden space-y-5"></section>
+    <div id="results-wrap" class="hidden mt-14 relative">
+      <div class="absolute -inset-x-4 -top-6 bottom-0 bg-olive-pale/60 rounded-[2rem] -z-10" aria-hidden="true"></div>
+      <section id="results" class="space-y-4 pt-2"></section>
+    </div>
 
   </main>
 
-  <!-- Toast container -->
-  <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
   <script>
     // ─── Config ───────────────────────────────────────────────────────────────
@@ -118,74 +149,89 @@
     const GROUPS = [
       {
         name: 'Work & Productivity',
-        color: 'border-blue-500',
-        badge: 'bg-blue-500/15 text-blue-400',
+        accent: '#3d4a1e',
         keywords: ['notion', 'jira', 'figma', 'docs.google', 'sheets.google', 'github', 'linear', 'confluence', 'slack', 'zoom', 'meet.google', 'loom'],
       },
       {
         name: 'Social',
-        color: 'border-pink-500',
-        badge: 'bg-pink-500/15 text-pink-400',
+        accent: '#5c6b3a',
         keywords: ['twitter', 'x.com', 'instagram', 'reddit', 'linkedin', 'facebook'],
       },
       {
         name: 'Shopping',
-        color: 'border-orange-500',
-        badge: 'bg-orange-500/15 text-orange-400',
+        accent: '#8b6914',
         keywords: ['amazon', 'flipkart', 'meesho', 'myntra', 'swiggy', 'zomato', 'blinkit'],
       },
       {
         name: 'Learning',
-        color: 'border-emerald-500',
-        badge: 'bg-emerald-500/15 text-emerald-400',
+        accent: '#4a6741',
         keywords: ['stackoverflow', 'stack overflow', 'mdn', 'medium', 'coursera', 'udemy', 'dev.to'],
       },
       {
         name: 'News & Reads',
-        color: 'border-amber-500',
-        badge: 'bg-amber-500/15 text-amber-400',
+        accent: '#7a6b52',
         keywords: ['timesofindia', 'thehindu', 'hindu', 'bbc', 'techcrunch', 'theverge', 'verge', 'wired', 'substack', 'nytimes', 'guardian'],
       },
       {
         name: 'Entertainment',
-        color: 'border-purple-500',
-        badge: 'bg-purple-500/15 text-purple-400',
+        accent: '#5a4a6b',
         keywords: ['netflix', 'spotify', 'hotstar', 'youtube', 'youtu.be', 'twitch'],
       },
       {
         name: 'Misc',
-        color: 'border-slate-500',
-        badge: 'bg-slate-500/15 text-slate-400',
+        accent: '#9a958a',
         keywords: [],
       },
     ];
 
     const TITLE_SUFFIXES = [
-      /\s*[-–—|]\s*YouTube\s*$/i,
-      /\s*[-–—|]\s*GitHub\s*$/i,
-      /\s*[-–—|]\s*Stack Overflow\s*$/i,
-      /\s*[-–—|]\s*Medium\s*$/i,
-      /\s*[-–—|]\s*Reddit\s*$/i,
-      /\s*[-–—|]\s*Twitter\s*$/i,
-      /\s*[-–—|]\s*X\s*$/i,
-      /\s*[-–—|]\s*LinkedIn\s*$/i,
-      /\s*[-–—|]\s*Google Docs\s*$/i,
-      /\s*[-–—|]\s*Google Sheets\s*$/i,
-      /\s*[-–—|]\s*Notion\s*$/i,
-      /\s*[-–—|]\s*Jira\s*$/i,
-      /\s*[-–—|]\s*Figma\s*$/i,
-      /\s*[-–—|]\s*Netflix\s*$/i,
-      /\s*[-–—|]\s*Spotify\s*$/i,
-      /\s*[-–—|]\s*Amazon\s*$/i,
+      /\s*[-–—|]\s*YouTube\s*$/i, /\s*[-–—|]\s*GitHub\s*$/i,
+      /\s*[-–—|]\s*Stack Overflow\s*$/i, /\s*[-–—|]\s*Medium\s*$/i,
+      /\s*[-–—|]\s*Reddit\s*$/i, /\s*[-–—|]\s*Twitter\s*$/i,
+      /\s*[-–—|]\s*X\s*$/i, /\s*[-–—|]\s*LinkedIn\s*$/i,
+      /\s*[-–—|]\s*Google Docs\s*$/i, /\s*[-–—|]\s*Google Sheets\s*$/i,
+      /\s*[-–—|]\s*Notion\s*$/i, /\s*[-–—|]\s*Jira\s*$/i,
+      /\s*[-–—|]\s*Figma\s*$/i, /\s*[-–—|]\s*Netflix\s*$/i,
+      /\s*[-–—|]\s*Spotify\s*$/i, /\s*[-–—|]\s*Amazon\s*$/i,
       /\s*[-–—|]\s*Wikipedia\s*$/i,
     ];
 
     const LEARNING_TITLE_RE = /\b(tutorial|course|learn|lesson|guide|how to|walkthrough|training|lecture|workshop)\b/i;
 
-    // ─── State ────────────────────────────────────────────────────────────────
-
-    let groupedTabs = {}; // { groupName: [tab, ...] }
+    let groupedTabs = {};
     let dragTabId = null;
+
+    // ─── Bookmark ─────────────────────────────────────────────────────────────
+
+    const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+    const bookmarkKbd = document.getElementById('bookmark-kbd');
+    bookmarkKbd.textContent = isMac ? '⌘ D' : 'Ctrl + D';
+
+    const dragLink = document.getElementById('bookmark-drag-link');
+    dragLink.href = location.href;
+
+    const popover = document.getElementById('bookmark-popover');
+    document.getElementById('btn-bookmark').addEventListener('click', e => {
+      e.stopPropagation();
+      // Legacy browser APIs
+      if (window.sidebar && window.sidebar.addPanel) {
+        window.sidebar.addPanel(document.title, location.href, '');
+        showToast('Bookmarked');
+        return;
+      }
+      if (window.external && 'AddFavorite' in window.external) {
+        window.external.AddFavorite(location.href, document.title);
+        showToast('Bookmarked');
+        return;
+      }
+      popover.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', e => {
+      if (!popover.contains(e.target) && e.target.id !== 'btn-bookmark') {
+        popover.classList.add('hidden');
+      }
+    });
 
     // ─── Parsing ──────────────────────────────────────────────────────────────
 
@@ -200,17 +246,14 @@
       try {
         const u = new URL(url.startsWith('http') ? url : 'https://' + url);
         return u.hostname.replace(/^www\./, '');
-      } catch {
-        return '';
-      }
+      } catch { return ''; }
     }
 
     function titleFromUrl(url) {
       const host = extractHostname(url);
       if (!host) return url;
       const parts = host.split('.');
-      if (parts.length >= 2) return parts[parts.length - 2];
-      return host;
+      return parts.length >= 2 ? parts[parts.length - 2] : host;
     }
 
     function parseLine(line) {
@@ -219,19 +262,16 @@
 
       const urlRe = /https?:\/\/[^\s,)]+/i;
 
-      // Bare URL
       if (/^https?:\/\/[^\s,)]+$/i.test(line)) {
         return { title: titleFromUrl(line), url: line };
       }
 
-      // title — url  (em dash, en dash, hyphen, pipe)
       const mixedRe = /^(.+?)\s*[-–—|]\s*(https?:\/\/[^\s,)]+)\s*$/i;
       const mixed = line.match(mixedRe);
       if (mixed) {
         return { title: cleanTitle(mixed[1]) || titleFromUrl(mixed[2]), url: mixed[2] };
       }
 
-      // URL embedded somewhere
       const urlMatch = line.match(urlRe);
       if (urlMatch) {
         const url = urlMatch[0];
@@ -239,23 +279,18 @@
         return { title: rest ? cleanTitle(rest) : titleFromUrl(url), url };
       }
 
-      // Title only
       return { title: cleanTitle(line), url: null };
     }
 
     function parseInput(text) {
-      const lines = text.split('\n');
       const seen = new Set();
       const tabs = [];
-
-      for (const line of lines) {
+      for (const line of text.split('\n')) {
         const tab = parseLine(line);
         if (!tab) continue;
-
         const key = tab.url ? tab.url.replace(/\/$/, '').toLowerCase() : tab.title.toLowerCase();
         if (seen.has(key)) continue;
         seen.add(key);
-
         tabs.push({ ...tab, id: crypto.randomUUID() });
       }
       return tabs;
@@ -267,10 +302,8 @@
       const host = tab.url ? extractHostname(tab.url) : '';
       const haystack = (host + ' ' + (tab.title || '')).toLowerCase();
 
-      // YouTube special case
       if (host.includes('youtube') || host.includes('youtu.be')) {
-        if (LEARNING_TITLE_RE.test(tab.title || '')) return 'Learning';
-        return 'Entertainment';
+        return LEARNING_TITLE_RE.test(tab.title || '') ? 'Learning' : 'Entertainment';
       }
 
       for (const group of GROUPS) {
@@ -285,11 +318,7 @@
     function groupTabs(tabs) {
       const result = {};
       for (const g of GROUPS) result[g.name] = [];
-      for (const tab of tabs) {
-        const group = categorize(tab);
-        result[group].push(tab);
-      }
-      // Remove empty groups except keep structure for drag-drop targets
+      for (const tab of tabs) result[categorize(tab)].push(tab);
       return result;
     }
 
@@ -302,127 +331,125 @@
 
     function faviconUrl(tab) {
       if (tab.url) return `https://www.google.com/s2/favicons?domain=${extractHostname(tab.url)}&sz=32`;
-      return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%2364748b"><rect width="24" height="24" rx="4"/></svg>');
+      return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="3" fill="%23c8c4b8"/></svg>');
     }
 
     function showToast(msg) {
-      const container = document.getElementById('toast-container');
       const el = document.createElement('div');
-      el.className = 'toast px-4 py-2.5 rounded-lg bg-slate-800 border border-white/10 text-sm text-slate-200 shadow-xl';
+      el.className = 'toast-item px-4 py-2.5 rounded-xl bg-ink text-white text-[13px] shadow-lg';
       el.textContent = msg;
-      container.appendChild(el);
-      setTimeout(() => el.remove(), 2600);
+      document.getElementById('toast-container').appendChild(el);
+      setTimeout(() => el.remove(), 2500);
     }
 
     function copyText(text) {
-      navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard'));
+      navigator.clipboard.writeText(text).then(() => showToast('Copied'));
     }
 
-    function groupToText(groupName, tabs) {
-      let out = groupName + '\n';
-      for (const t of tabs) {
-        out += t.url ? `  ${t.title} — ${t.url}\n` : `  ${t.title}\n`;
-      }
+    function groupToText(name, tabs) {
+      let out = name + '\n';
+      for (const t of tabs) out += t.url ? `  ${t.title} — ${t.url}\n` : `  ${t.title}\n`;
       return out.trim();
     }
 
-    function groupToMarkdown(groupName, tabs) {
-      let out = `## ${groupName}\n`;
-      for (const t of tabs) {
-        out += t.url ? `- [${t.title}](${t.url})\n` : `- ${t.title}\n`;
-      }
+    function groupToMarkdown(name, tabs) {
+      let out = `## ${name}\n`;
+      for (const t of tabs) out += t.url ? `- [${t.title}](${t.url})\n` : `- ${t.title}\n`;
       return out.trim();
     }
 
     function allToMarkdown(grouped) {
-      return GROUPS
-        .filter(g => grouped[g.name]?.length)
-        .map(g => groupToMarkdown(g.name, grouped[g.name]))
-        .join('\n\n');
+      return GROUPS.filter(g => grouped[g.name]?.length).map(g => groupToMarkdown(g.name, grouped[g.name])).join('\n\n');
     }
+
+    function escapeHtml(str) {
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function escapeAttr(str) { return escapeHtml(str).replace(/'/g, '&#39;'); }
 
     // ─── Rendering ────────────────────────────────────────────────────────────
 
     function renderResults() {
       const container = document.getElementById('results');
+      const wrap = document.getElementById('results-wrap');
       container.innerHTML = '';
 
       const nonEmpty = GROUPS.filter(g => groupedTabs[g.name]?.length);
+      const actions = document.getElementById('global-actions');
+
       if (!nonEmpty.length) {
-        container.classList.add('hidden');
-        document.getElementById('global-actions').classList.add('hidden');
-        document.getElementById('global-actions').classList.remove('flex');
+        wrap.classList.add('hidden');
+        actions.classList.add('hidden');
+        actions.classList.remove('flex');
         return;
       }
 
-      container.classList.remove('hidden');
-      const globalActions = document.getElementById('global-actions');
-      globalActions.classList.remove('hidden');
-      globalActions.classList.add('flex');
+      wrap.classList.remove('hidden');
+      actions.classList.remove('hidden');
+      actions.classList.add('flex');
 
       nonEmpty.forEach((group, idx) => {
         const tabs = groupedTabs[group.name];
         const card = document.createElement('div');
-        card.className = `group-card animate-in border-l-4 ${group.color} rounded-xl bg-white/[0.03] border border-white/[0.06] overflow-hidden`;
-        card.style.animationDelay = `${idx * 0.06}s`;
+        card.className = 'group-card rise rounded-[1.5rem] bg-white border border-black/[0.07] overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.04)]';
+        card.style.animationDelay = `${idx * 0.05}s`;
+        card.style.borderLeft = `3px solid ${group.accent}`;
         card.dataset.group = group.name;
 
         card.innerHTML = `
-          <div class="px-5 py-4 flex items-center justify-between gap-3 border-b border-white/[0.04]">
-            <div class="flex items-center gap-3 min-w-0">
-              <h2 class="text-base font-semibold text-white truncate">${group.name}</h2>
-              <span class="shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${group.badge}">${tabs.length}</span>
+          <div class="px-5 py-4 flex items-start sm:items-center justify-between gap-3 border-b border-black/[0.05]">
+            <div class="flex items-baseline gap-2.5 min-w-0">
+              <h2 class="font-serif text-[1.35rem] leading-tight text-ink truncate">${group.name}</h2>
+              <span class="shrink-0 text-[11px] font-medium text-stone tabular-nums">${tabs.length}</span>
             </div>
-            <div class="flex items-center gap-2 shrink-0">
-              <button data-action="copy-text" data-group="${group.name}" class="px-2.5 py-1 text-xs rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border border-white/10 transition-colors">Copy as text</button>
-              <button data-action="copy-md" data-group="${group.name}" class="px-2.5 py-1 text-xs rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border border-white/10 transition-colors">Copy as markdown</button>
+            <div class="flex items-center gap-1 shrink-0">
+              <button data-action="copy-text" data-group="${group.name}" class="px-2.5 py-1 text-[11px] text-stone hover:text-ink transition-colors">Copy text</button>
+              <span class="text-black/10">·</span>
+              <button data-action="copy-md" data-group="${group.name}" class="px-2.5 py-1 text-[11px] text-stone hover:text-ink transition-colors">Copy md</button>
             </div>
           </div>
-          <div class="tab-list divide-y divide-white/[0.04]" data-group="${group.name}"></div>
+          <div class="tab-list" data-group="${group.name}"></div>
         `;
 
         const list = card.querySelector('.tab-list');
-        tabs.forEach(tab => list.appendChild(renderTabRow(tab, group.name)));
+        tabs.forEach((tab, i) => {
+          const row = renderTabRow(tab, group.name);
+          if (i > 0) row.classList.add('border-t', 'border-black/[0.04]');
+          list.appendChild(row);
+        });
 
-        // Drop zone events on card
         card.addEventListener('dragover', e => { e.preventDefault(); card.classList.add('drag-over'); });
         card.addEventListener('dragleave', e => { if (!card.contains(e.relatedTarget)) card.classList.remove('drag-over'); });
-        card.addEventListener('drop', e => {
-          e.preventDefault();
-          card.classList.remove('drag-over');
-          handleDrop(group.name);
-        });
+        card.addEventListener('drop', e => { e.preventDefault(); card.classList.remove('drag-over'); handleDrop(group.name); });
 
         container.appendChild(card);
       });
 
-      // Delegate copy buttons
       container.querySelectorAll('[data-action]').forEach(btn => {
         btn.addEventListener('click', () => {
           const g = btn.dataset.group;
           const tabs = groupedTabs[g];
-          if (btn.dataset.action === 'copy-text') copyText(groupToText(g, tabs));
-          else copyText(groupToMarkdown(g, tabs));
+          copyText(btn.dataset.action === 'copy-text' ? groupToText(g, tabs) : groupToMarkdown(g, tabs));
         });
       });
     }
 
     function renderTabRow(tab, groupName) {
       const row = document.createElement('div');
-      row.className = 'tab-row flex items-center gap-3 px-5 py-2.5 hover:bg-white/[0.03] transition-colors';
+      row.className = 'tab-row flex items-center gap-3 px-5 py-2.5 hover:bg-cream/60 transition-colors';
       row.draggable = true;
       row.dataset.tabId = tab.id;
       row.dataset.group = groupName;
 
       const titleHtml = tab.url
-        ? `<a href="${escapeAttr(tab.url)}" target="_blank" rel="noopener" class="text-sm text-slate-300 hover:text-indigo-400 transition-colors truncate" title="${escapeAttr(tab.title)}">${escapeHtml(truncate(tab.title))}</a>`
-        : `<span class="text-sm text-slate-400 truncate" title="${escapeAttr(tab.title)}">${escapeHtml(truncate(tab.title))}</span>`;
+        ? `<a href="${escapeAttr(tab.url)}" target="_blank" rel="noopener" class="text-[13px] text-ink hover:text-olive transition-colors truncate" title="${escapeAttr(tab.title)}">${escapeHtml(truncate(tab.title))}</a>`
+        : `<span class="text-[13px] text-stone truncate" title="${escapeAttr(tab.title)}">${escapeHtml(truncate(tab.title))}</span>`;
 
       row.innerHTML = `
-        <img src="${faviconUrl(tab)}" alt="" class="w-4 h-4 shrink-0 rounded-sm" loading="lazy" onerror="this.style.opacity='0.3'" />
+        <img src="${faviconUrl(tab)}" alt="" class="w-4 h-4 shrink-0 rounded-[3px]" loading="lazy" onerror="this.style.opacity='0.35'" />
         <div class="flex-1 min-w-0">${titleHtml}</div>
-        ${tab.url ? `<span class="hidden sm:block text-xs text-slate-600 truncate max-w-[180px] font-mono">${escapeHtml(truncate(extractHostname(tab.url), 30))}</span>` : ''}
-        <svg class="w-4 h-4 text-slate-700 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
+        ${tab.url ? `<span class="hidden sm:block text-[11px] text-stone/70 truncate max-w-[140px]">${escapeHtml(truncate(extractHostname(tab.url), 28))}</span>` : ''}
       `;
 
       row.addEventListener('dragstart', e => {
@@ -442,16 +469,10 @@
 
     function handleDrop(targetGroup) {
       if (!dragTabId) return;
-
-      let sourceGroup = null;
-      let tab = null;
+      let sourceGroup = null, tab = null;
       for (const [g, tabs] of Object.entries(groupedTabs)) {
         const idx = tabs.findIndex(t => t.id === dragTabId);
-        if (idx !== -1) {
-          sourceGroup = g;
-          tab = tabs.splice(idx, 1)[0];
-          break;
-        }
+        if (idx !== -1) { sourceGroup = g; tab = tabs.splice(idx, 1)[0]; break; }
       }
       if (!tab || sourceGroup === targetGroup) {
         if (tab && sourceGroup) groupedTabs[sourceGroup].push(tab);
@@ -461,47 +482,33 @@
       renderResults();
     }
 
-    function escapeHtml(str) {
-      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
-
-    function escapeAttr(str) {
-      return escapeHtml(str).replace(/'/g, '&#39;');
-    }
-
     function showError(msg) {
       const el = document.getElementById('error-msg');
       el.textContent = msg;
       el.classList.remove('hidden');
     }
 
-    function hideError() {
-      document.getElementById('error-msg').classList.add('hidden');
-    }
-
-    // ─── Main actions ─────────────────────────────────────────────────────────
+    function hideError() { document.getElementById('error-msg').classList.add('hidden'); }
 
     function handleGroup() {
       hideError();
-      const text = document.getElementById('tab-input').value;
-      const tabs = parseInput(text);
-
+      const tabs = parseInput(document.getElementById('tab-input').value);
       if (tabs.length < 2) {
-        showError('Need at least 2 tabs to group. Paste more tabs and try again.');
-        document.getElementById('results').classList.add('hidden');
+        showError('Need at least 2 tabs to group. Paste a few more and try again.');
+        document.getElementById('results-wrap').classList.add('hidden');
         document.getElementById('global-actions').classList.add('hidden');
         document.getElementById('global-actions').classList.remove('flex');
         return;
       }
-
       groupedTabs = groupTabs(tabs);
       renderResults();
+      document.getElementById('results-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function handleClear() {
       document.getElementById('tab-input').value = '';
       groupedTabs = {};
-      document.getElementById('results').classList.add('hidden');
+      document.getElementById('results-wrap').classList.add('hidden');
       document.getElementById('global-actions').classList.add('hidden');
       document.getElementById('global-actions').classList.remove('flex');
       hideError();
@@ -509,11 +516,7 @@
 
     document.getElementById('btn-group').addEventListener('click', handleGroup);
     document.getElementById('btn-clear').addEventListener('click', handleClear);
-    document.getElementById('btn-export-all').addEventListener('click', () => {
-      copyText(allToMarkdown(groupedTabs));
-    });
-
-    // Keyboard shortcut: Ctrl/Cmd + Enter to group
+    document.getElementById('btn-export-all').addEventListener('click', () => copyText(allToMarkdown(groupedTabs)));
     document.getElementById('tab-input').addEventListener('keydown', e => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') handleGroup();
     });
